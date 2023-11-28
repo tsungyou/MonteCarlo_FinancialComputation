@@ -1,0 +1,246 @@
+# 0525_3 Homework 5
+# 0601_2 21:30 for montecarlo asian option
+
+# Basic Only
+import numpy as np 
+from numpy import exp, log, maximum, sqrt, power
+import math 
+import copy
+import time
+S_t = 100
+K = 100
+R = 0
+Q = 0.1
+Sigma = 0.4
+small_t = 0
+big_T = 1
+diff = big_T - small_t
+global_M = 10 # intervals = nodes - 1 
+global_n = 4
+S_average_t = 50
+number_of_simulation = 100
+number_of_repetition = 20
+round_test = 10
+
+
+def asian_option(type="a", bonus_1=False):
+    st = S_t
+    k = K
+    r = R
+    q = Q
+    sigma = Sigma
+    m=global_M
+    t = small_t
+    T = big_T
+    n = global_n
+    s_avg = S_average_t
+
+    #initialization
+    dt = (T-t)/(n)
+    u = exp(sigma*sqrt(dt))
+    d = 1/u 
+    p = (exp((r-q)*dt) - d)/(u-d)
+
+    # in terms of arithmetic average, the denominator varies with difference t, current time.
+    if t == 0:
+        addition = 0
+    else:
+        addition = t*n/(T-t)
+
+
+    tree = np.zeros([m+1, n+1, n+1])
+
+    for column in range(n+1):
+        for row in range(0, column+1):
+            # handouts 10-4
+            up = u*((1-u**(column-row))/(1-u))
+            down = (u**(column-row))*d*((1-d**(row))/(1-d))
+            
+            
+
+            #recorded at first element of third dimension of each node
+            tree[0, row, column] = st*(1+up+down)/(column+1+addition)
+
+            if row != column and row != 0:
+                up_min = d*((1-d**(row))/(1-d))
+                down_min = (d**row)*u*((1-u**(column-row))/(1-u))
+                tree[m, row, column] = (s_avg*(1+addition)+st*(up_min+down_min))/(column+1+addition)
+
+    
+    
+
+
+    for column in range(0, n+1):
+        for row in range(0, column+1):
+            # excludes first and last element of third dimension
+            for i in range(1, m):
+                if row != column and row != 0:
+                    if bonus_1:
+                        terms = (tree[0, row, column] - tree[m, row, column])/m
+                        tree[i, row, column] = tree[0, row, column] - i*terms
+                    else:
+                        tree[i, row, column] = exp( ((m-i)/m)*log(tree[0, row, column]) + (i/m)*log(tree[m, row ,column]) ) 
+
+    tree = np.round(tree, round_test)
+    option_price_tree = np.round(option_price_tree, round_test) 
+
+    for column in range(n-1, -1, -1):
+        for row in range(0, column+1):
+            if column != 0:
+                for i in range(0, m+1):
+
+                    if tree[i, row, column] != 0:
+                        au = np.round(((column+1+addition)*tree[i, row, column] + st*(u**(column+1-row))*(d**row))/(column+2+addition), round_test)
+                        ad = np.round(((column+1+addition)*tree[i, row, column] + st*(u**(column-row))*(d**(row+1)))/(column+2+addition), round_test)
+
+                        larger_index_boundary = m+1
+                        smaller_index_boundary = 0
+
+                        while True:
+                            denominator = (larger_index_boundary + smaller_index_boundary)
+                        
+                            if denominator % 2 == 0:
+                                test_index = int(denominator/2)
+                            else:
+                                test_index = int((denominator-1)/2)
+                            # print(denominator)
+                            # print("last:", last_small, last_large)
+                            # print(test_index, test_index+1)
+                            
+                            number = tree[test_index, row, column+1]
+                            number_1 = tree[test_index+1, row, column+1]
+                            
+
+                            # print(number)
+                            # print(number_1)
+                            # time.sleep(0.1)
+                            # print("===================")
+
+                            # meet under, number > 皜祈岫 > number_1
+
+                            if number >= au and au >= number_1 :
+                                # calculation
+                                option_price_1 = tree[test_index, row, column+1]
+                                option_price_2 = tree[test_index+1, row, column+1]
+
+                                wu = (option_price_1 - au)/(option_price_1 - option_price_2)
+                                cu = wu * option_price_tree[test_index+1, row, column+1] + (1 - wu) * option_price_tree[test_index, row, column+1]
+                                break
+
+
+                            elif number < au and number_1 < au:
+                                larger_index_boundary = test_index#larger(index) boundary 
+                                smaller_index_boundary = smaller_index_boundary
+                            elif number > au and number_1 > au:
+                                smaller_index_boundary = test_index#smaller(index) boundary
+                                larger_index_boundary = larger_index_boundary
+
+                        larger_index_boundary_ad = m+1
+                        smaller_index_boundary_ad = 0
+                        # print("ad: ", ad)
+                        while True:
+                            # print("next ad")
+                            denominator_ad = larger_index_boundary_ad + smaller_index_boundary_ad
+                            
+                            if denominator_ad % 2 == 0:
+                                test_index_ad = int(denominator_ad/2)
+                            else:
+                                test_index_ad = int((denominator_ad-1)/2)
+                            number_ad = tree[test_index_ad, row+1, column+1]
+                            number_ad_2 = tree[test_index_ad+1, row+1, column+1]
+
+                            # print(test_index_ad, test_index_ad+1)
+                            # print(number_ad)
+                            # print(number_ad_2)
+                            # time.sleep(0.1)
+                            # print("===================")
+
+
+                            if number_ad >= ad and ad >= number_ad_2:
+                                option_price_ad_1 = tree[test_index_ad, row+1, column+1] # bigger
+                                option_price_ad_2 = tree[test_index_ad+1, row+1, column+1] # smaller
+                                wu_ad = (option_price_ad_1 - ad)/(option_price_ad_1 - option_price_ad_2) # use underlying asset price find the parameter for interpolation
+                                cd = wu_ad * option_price_tree[test_index_ad+1, row+1, column+1] + (1-wu_ad) * option_price_tree[test_index_ad, row+1, column+1] # execute interpolation on option price, and the result to be the required backward induction price
+                                break
+
+                            elif number_ad < ad and number_ad_2 < ad:
+                                larger_index_boundary_ad = test_index_ad
+                                smaller_index_boundary_ad = smaller_index_boundary_ad
+                            elif number_ad > ad and number_ad_2 > ad:
+                                larger_index_boundary_ad = larger_index_boundary_ad
+                                smaller_index_boundary_ad = test_index_ad
+                        
+                        # calculate cu + cd
+                        if type == "e":
+                            option_price_tree[i, row, column] = (p*cu + (1-p)*cd)*exp(-r*dt)
+                        elif type == "a":
+                            option_price_tree[i, row, column] = maximum(option_price_tree[i, row, column], (p*cu + (1-p)*cd)*exp(-r*dt))
+                        else:
+                            return f"ExecutionTypeError: received {type}, must be a for american or e for european"
+
+            else:
+                term = (p*option_price_tree[0, 0, 1] + (1-p)*option_price_tree[0, 1, 1])*exp(-r*dt)
+                if type == "e":
+                    option_price_tree[0, 0, 0] = term
+                elif type == "a":
+                    option_price_tree[0, 0, 0] = maximum(option_price_tree[0, 0, 0], term)
+    if type == "a":
+        return option_price_tree[0][0][0]
+    elif type=="e":
+        return option_price_tree[0][0][0]
+
+
+def montecarlo_asian_option():
+    k = K
+    r = R
+    q = Q
+    sigma = Sigma
+    t = small_t
+    T = big_T
+    M = global_M
+    n = 100#global_n # time interval
+    s_avg_t = S_average_t
+    sims = number_of_simulation
+    reps = number_of_repetition
+
+    dt = (T-t)/(n)
+
+    # print(a)
+    
+    
+    rep = np.zeros(reps)
+    sim = np.zeros(sims)
+    for h in range(len(rep)): # 20
+        for j in range(len(sim)): # 10000
+            z = np.random.randn(n+1)
+            st = S_t
+            average = st
+            for i in range(1, n+1):
+
+                next_s = st * exp((r-q-power(sigma, 2)/2)*dt + sigma * sqrt(dt) * z[i])
+                average = (i*average + next_s)/(i+1)
+                st = next_s
+            sim[j] = max(average-k, 0)
+        rep[h] = np.mean(sim) * exp(-r*(T-t))
+        print(rep[h])
+    mean = np.mean(rep)
+    std = np.std(rep)
+    print("Montecarlo simulation: ", [mean-1.96*std, mean+1.96*std])
+    return 0
+def main():
+    print("Asian option price-european, call:", asian_option(type="e"))
+    print("Asian option price-american, call:", asian_option(type="a"))
+    
+    ...
+def bonus_1():
+    linear = []
+    logarithmically = []
+    for i in range(50, 401, 50):
+        logarithmically.append(asian_option(type="e", bonus_1=False, m=i))
+        linear.append(asian_option(type="e", bonus_1=True, m=i))
+    print(linear)
+    print(logarithmically)
+if __name__ == "__main__":
+    montecarlo_asian_option()
+    main()
+    # bonus_1()
